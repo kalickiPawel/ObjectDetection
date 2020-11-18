@@ -2,11 +2,9 @@ import numpy as np
 import cv2
 import time
 import pickle
-from sklearn.ensemble import AdaBoostClassifier
-from sklearn.tree import DecisionTreeClassifier
 from numba import jit
 
-from realboostbins import RealBoostBins
+from src.realboostbins import RealBoostBins
 
 DEF_HEIGHT = 480
 
@@ -428,8 +426,8 @@ def detect(i, clf, hfs_coords_subset, n, fi, clf_threshold=0.0):
 
 if __name__ == "__main__":
     print("STARTING...")
-    path_data_root = "./data/"
-    path_clfs_root = "./clfs/"
+    path_data_root = "../data/"
+    path_clfs_root = "../clfs/"
     s = 6
     p = 4
     hfs_indexes = haar_features_indexes(s, p)
