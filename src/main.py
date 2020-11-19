@@ -2,11 +2,13 @@ import numpy as np
 import cv2
 import time
 import pickle
+import sklearn.metrics as metrics
+import matplotlib.pyplot as plt
+
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 from numba import jit
 from src.realboostbins import RealBoostBins
-
 
 DEF_HEIGHT = 480
 
@@ -156,7 +158,6 @@ def haar_features2(ii, hfs_coords_window_subset, j0, k0, n, fi, features):
     return features
 
 
-
 def draw_haar_feature_at(i, hf_coords, j0, k0):
     j, k, h, w = hf_coords[0]
     j1 = int(j0 + j)
@@ -208,10 +209,10 @@ def fddb_read_single_fold(path_root, path_fold_relative, n_negs_per_img, hfs_coo
     n_img = 0
     n_faces = 0
     counter = 0
-    while line is not "":
+    while line != "":
         file_name = path_root + line + ".jpg"
         log_line = str(counter) + ": [" + file_name + "]"
-        if fold_title is not "":
+        if fold_title != "":
             log_line += " [" + fold_title + "]"
         print(log_line)
         counter += 1
@@ -375,14 +376,14 @@ def detect(i, clf, hfs_coords_subset, n, fi, clf_threshold=0.0):
     ii = integral_image(i_gray)
     features = np.zeros(n, "int32")
 
-    #lists for coords mean rectangles
-    faces=[]
+    # lists for coords mean rectangles
+    faces = []
 
     print("IMAGE SHAPE: " + str(i_gray.shape))
 
     n_windows_max = 0
     for s in range(DETECTION_SCALES):
-        w = int(np.round(DETECTION_W_MIN * DETECTION_WINDOW_GROWTH**s))
+        w = int(np.round(DETECTION_W_MIN * DETECTION_WINDOW_GROWTH ** s))
         dj = int(np.round(w * DETECTION_WINDOW_JUMP))
         dk = dj
         print("S = " + str(s) + ", DJ = " + str(dj) + ", DK = " + str(dk) + "...")
@@ -398,7 +399,7 @@ def detect(i, clf, hfs_coords_subset, n, fi, clf_threshold=0.0):
     n_windows = 0
     t1 = time.time()
     for s in range(DETECTION_SCALES):
-        w = int(np.round(DETECTION_W_MIN * DETECTION_WINDOW_GROWTH**s))
+        w = int(np.round(DETECTION_W_MIN * DETECTION_WINDOW_GROWTH ** s))
         dj = int(np.round(w * DETECTION_WINDOW_JUMP))
         dk = dj
         print("S = " + str(s) + ", W =  " + str(w), "DJ = " + str(dj) + ", DK = " + str(dk) + "...")
@@ -417,7 +418,7 @@ def detect(i, clf, hfs_coords_subset, n, fi, clf_threshold=0.0):
                 # print("EXTRACTION: " + str(t2_extraction - t1_extraction) + "s, DECISION: " + str(t2_decision - t1_decision))
                 if decision > clf_threshold:
                     print("DETECTION AT " + str((j, k)))
-                    #cv2.rectangle(i_resized, (k, j), (k + w - 1, j + w - 1), (0, 0, 255), 1)
+                    # cv2.rectangle(i_resized, (k, j), (k + w - 1, j + w - 1), (0, 0, 255), 1)
                     faces.append([k, j, k + w - 1, j + w - 1])
                 n_windows += 1
                 # if n_windows % progress_step == 0:
@@ -427,10 +428,39 @@ def detect(i, clf, hfs_coords_subset, n, fi, clf_threshold=0.0):
         print("RECT " + str(it) + " AT " + str((face[0], face[1])) + str((face[2], face[3])))
         cv2.rectangle(i_resized, (face[0], face[1]), (face[2], face[3]), (0, 0, 255))
     t2 = time.time()
-    total_time = t2-t1
+    total_time = t2 - t1
     print("TOTAL TIME: " + str(total_time) + "s.")
-    print("TIME PER WINDOW: " + str(total_time/n_windows) + "s.")
+    print("TIME PER WINDOW: " + str(total_time / n_windows) + "s.")
     return i_resized
+
+
+def generate_draw_roc(X_test, y_test, clf):
+    y_scores = clf.decision_function(X_test)
+    fpr, tpr, threshold = metrics.roc_curve(y_test, y_scores)
+    roc_auc = metrics.auc(fpr, tpr)
+
+    plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % roc_auc)
+    plt.title('ROC')
+    plt.legend(loc='lower right')
+    plt.plot([0, 1], [0, 1], 'r--')
+    plt.grid()
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+    plt.ylabel('TPR')
+    plt.xlabel('FPR')
+    plt.show()
+
+    plt.title('ROC - logarithmic')
+    plt.plot(fpr, tpr, 'b', lw=2)
+    plt.ylabel('TPR')
+    plt.xlabel('FPR')
+    plt.ylim([0, 1])
+    plt.xscale('log')
+    plt.show()
+
+    optimal_proba_cutoff = sorted(list(zip(np.abs(tpr - fpr), threshold)), key=lambda i: i[0], reverse=True)[0][1]
+    print("Best threshold: " + str(optimal_proba_cutoff))
+
 
 if __name__ == "__main__":
     print("STARTING...")
@@ -529,6 +559,8 @@ if __name__ == "__main__":
     # t2 = time.time()
     # print("ACCURACY MEASUREING DONE IN " + str(t2 - t1) + " s.")
 
+    generate_draw_roc(X_test, y_test, clf)
+
     i = cv2.imread(path_data_root + "000000.jpg")
     hfs_coords_subset = hfs_coords[fi]
     i_out = detect(i, clf, hfs_coords_subset, n, fi, clf_threshold=2.5)
@@ -538,13 +570,13 @@ if __name__ == "__main__":
     print("DONE.")
 
     # TODO
-    # zad 1 - grupowanie klastrów okien na podstawie indeksu jaccarda
+    # v_zad 1 - grupowanie klastrów okien na podstawie indeksu jaccarda
     #       wykrycia - kwadraty - grupować w pojedyncze (funkcja detect, zamiast rysować rectangle na ekran to zebrać
     #       wykrycia w tabelki i potem uśrednione wyświetlić np. 3 okna wokół jednej twarzy zebrać razem i uśrednić)
     #       iou podajemy dwa okienka i otrzymamy wynik tego jak mocno one się
     #       nakładają(to nam pomoze w detekcji okienek dotyzących jednej twarzy)
     #       indeks jacarda (taka tolerancja którą wykorzystasz jako próg przy grupowaniu) dobry to ok. 0.5 ale potestuj
-    # zad 2 - wygenerować ROC dla zbioru testowego(sklearn.metrics?) -> wybrać próg decyzyjny odpowiadający największej
+    # v_zad 2 - wygenerować ROC dla zbioru testowego(sklearn.metrics?) -> wybrać próg decyzyjny odpowiadający największej
     # dokładności
     #       wybrać lepszy próg clf_threshold
     #       X_test, y_test... tam generujemy krzywą ROC (można ją wyrysować)
